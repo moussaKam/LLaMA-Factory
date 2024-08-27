@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import os
+import glob
 import sys
 from typing import TYPE_CHECKING, Dict, Literal, Optional, Sequence, Union
 
@@ -25,7 +26,7 @@ from ..extras.logging import get_logger
 from ..extras.misc import has_tokenized_data
 from .aligner import align_dataset
 from .data_utils import merge_dataset, split_dataset
-from .parser import get_dataset_list
+from .parser import get_dataset_list, get_dataset_list_from_path_pattern
 from .preprocess import get_preprocess_and_print_func
 from .template import get_template_and_fix_tokenizer
 
@@ -164,17 +165,28 @@ def _get_merged_dataset(
         return None
 
     datasets = []
-    for dataset_attr in get_dataset_list(dataset_names, data_args.dataset_dir):
-        if (stage == "rm" and dataset_attr.ranking is False) or (
-            stage != "rm" and dataset_attr.ranking is True
-        ):
-            raise ValueError(
-                "The dataset is not applicable in the current training stage."
-            )
 
-        datasets.append(
-            _load_single_dataset(dataset_attr, model_args, data_args, training_args)
-        )
+    if data_args.dataset_pattern is not None:
+        for dataset_attr in get_dataset_list_from_path_pattern(
+            data_args.dataset_pattern, data_args
+        ):
+            datasets.append(
+                _load_single_dataset(
+                    dataset_attr, model_args, data_args, training_args
+                )
+            )
+    else:
+        for dataset_attr in get_dataset_list(dataset_names, data_args.dataset_dir):
+            if (stage == "rm" and dataset_attr.ranking is False) or (
+                stage != "rm" and dataset_attr.ranking is True
+            ):
+                raise ValueError(
+                    "The dataset is not applicable in the current training stage."
+                )
+
+            datasets.append(
+                _load_single_dataset(dataset_attr, model_args, data_args, training_args)
+            )
 
     return merge_dataset(datasets, data_args, seed=training_args.seed)
 

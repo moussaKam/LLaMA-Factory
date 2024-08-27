@@ -21,6 +21,7 @@ from transformers.utils import cached_file
 
 from ..extras.constants import DATA_CONFIG
 from ..extras.misc import use_modelscope
+import glob
 
 
 @dataclass
@@ -66,11 +67,67 @@ class DatasetAttr:
     def __repr__(self) -> str:
         return self.dataset_name
 
-    def set_attr(self, key: str, obj: Dict[str, Any], default: Optional[Any] = None) -> None:
+    def set_attr(
+        self, key: str, obj: Dict[str, Any], default: Optional[Any] = None
+    ) -> None:
         setattr(self, key, obj.get(key, default))
 
 
-def get_dataset_list(dataset_names: Optional[Sequence[str]], dataset_dir: str) -> List["DatasetAttr"]:
+def get_dataset_list_from_path_pattern(
+    dataset_pattern: str, data_args: Any
+) -> List["DatasetAttr"]:
+    matching_paths = glob.glob(dataset_pattern)
+    paths = [os.path.abspath(path) for path in matching_paths]
+    dataset_list: List["DatasetAttr"] = []
+    for path in paths:
+        if not os.path.exists(path):
+            raise ValueError("Path {} does not exist.".format(path))
+        name = path
+        dataset_attr = DatasetAttr("file", dataset_name=name)
+        setattr(dataset_attr, "formatting", data_args.formatting)
+        setattr(dataset_attr, "prompt", data_args.prompt)
+        setattr(dataset_attr, "split", "train")
+
+        column_names = [
+            "system",
+            "tools",
+            "images",
+            "chosen",
+            "rejected",
+            "kto_tag",
+        ]
+        
+        if dataset_attr.formatting == "alpaca":
+            column_names.extend(["prompt", "query", "response", "history"])
+        else:
+            column_names.extend(["messages"])
+
+        for column_name in column_names:
+            # if not in data_args, set to None
+            if not hasattr(data_args, column_name):
+                setattr(dataset_attr, column_name, None)
+            
+
+    # if dataset_attr.formatting == "sharegpt" and "tags" in dataset_info[name]:
+    #     tag_names = (
+    #         "role_tag",
+    #         "content_tag",
+    #         "user_tag",
+    #         "assistant_tag",
+    #         "observation_tag",
+    #         "function_tag",
+    #         "system_tag",
+    #     )
+    #     for tag in tag_names:
+    #         dataset_attr.set_attr(tag, dataset_info[name]["tags"])
+    
+        dataset_list.append(dataset_attr)
+    return dataset_list
+
+
+def get_dataset_list(
+    dataset_names: Optional[Sequence[str]], dataset_dir: str
+) -> List["DatasetAttr"]:
     r"""
     Gets the attributes of the datasets.
     """
@@ -81,7 +138,11 @@ def get_dataset_list(dataset_names: Optional[Sequence[str]], dataset_dir: str) -
         dataset_info = None
     else:
         if dataset_dir.startswith("REMOTE:"):
-            config_path = cached_file(path_or_repo_id=dataset_dir[7:], filename=DATA_CONFIG, repo_type="dataset")
+            config_path = cached_file(
+                path_or_repo_id=dataset_dir[7:],
+                filename=DATA_CONFIG,
+                repo_type="dataset",
+            )
         else:
             config_path = os.path.join(dataset_dir, DATA_CONFIG)
 
@@ -90,7 +151,9 @@ def get_dataset_list(dataset_names: Optional[Sequence[str]], dataset_dir: str) -
                 dataset_info = json.load(f)
         except Exception as err:
             if len(dataset_names) != 0:
-                raise ValueError("Cannot open {} due to {}.".format(config_path, str(err)))
+                raise ValueError(
+                    "Cannot open {} due to {}.".format(config_path, str(err))
+                )
 
             dataset_info = None
 
@@ -110,13 +173,21 @@ def get_dataset_list(dataset_names: Optional[Sequence[str]], dataset_dir: str) -
 
         if has_hf_url or has_ms_url:
             if (use_modelscope() and has_ms_url) or (not has_hf_url):
-                dataset_attr = DatasetAttr("ms_hub", dataset_name=dataset_info[name]["ms_hub_url"])
+                dataset_attr = DatasetAttr(
+                    "ms_hub", dataset_name=dataset_info[name]["ms_hub_url"]
+                )
             else:
-                dataset_attr = DatasetAttr("hf_hub", dataset_name=dataset_info[name]["hf_hub_url"])
+                dataset_attr = DatasetAttr(
+                    "hf_hub", dataset_name=dataset_info[name]["hf_hub_url"]
+                )
         elif "script_url" in dataset_info[name]:
-            dataset_attr = DatasetAttr("script", dataset_name=dataset_info[name]["script_url"])
+            dataset_attr = DatasetAttr(
+                "script", dataset_name=dataset_info[name]["script_url"]
+            )
         else:
-            dataset_attr = DatasetAttr("file", dataset_name=dataset_info[name]["file_name"])
+            dataset_attr = DatasetAttr(
+                "file", dataset_name=dataset_info[name]["file_name"]
+            )
 
         dataset_attr.set_attr("formatting", dataset_info[name], default="alpaca")
         dataset_attr.set_attr("ranking", dataset_info[name], default=False)
@@ -126,7 +197,14 @@ def get_dataset_list(dataset_names: Optional[Sequence[str]], dataset_dir: str) -
         dataset_attr.set_attr("num_samples", dataset_info[name])
 
         if "columns" in dataset_info[name]:
-            column_names = ["system", "tools", "images", "chosen", "rejected", "kto_tag"]
+            column_names = [
+                "system",
+                "tools",
+                "images",
+                "chosen",
+                "rejected",
+                "kto_tag",
+            ]
             if dataset_attr.formatting == "alpaca":
                 column_names.extend(["prompt", "query", "response", "history"])
             else:

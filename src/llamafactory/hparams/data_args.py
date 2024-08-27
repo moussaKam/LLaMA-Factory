@@ -29,6 +29,10 @@ class DataArguments:
         default=None,
         metadata={"help": "Which template to use for constructing prompts in training and inference."},
     )
+    dataset_pattern: Optional[str] = field(
+        default=None,
+        metadata={"help": "Path pattern of datasets."},
+    )
     dataset: Optional[str] = field(
         default=None,
         metadata={"help": "The name of dataset(s) to use for training. Use commas to separate multiple datasets."},
@@ -40,6 +44,14 @@ class DataArguments:
     dataset_dir: str = field(
         default="data",
         metadata={"help": "Path to the folder containing the datasets."},
+    )
+    prompt: Optional[str] = field(
+        default=None,
+        metadata={"help": "prompt column name in the dataset."},
+    )
+    formatting: Optional[str] = field(
+        default="alpaca",
+        metadata={"help": "Formatting of the dataset."},
     )
     cutoff_len: int = field(
         default=1024,
